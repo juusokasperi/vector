@@ -6,12 +6,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <stdarg.h>
 
 #ifndef GROWTH_FACTOR
 # define GROWTH_FACTOR (2)
 #endif
-
-typedef struct Arena Arena;
 
 typedef void *(*alloc_fn)(void *ctx, size_t size);
 typedef void (*free_fn)(void *ctx, void *ptr);
@@ -82,11 +81,6 @@ void	vector_erase(Vector *v, size_t index);
 void	vector_pop(Vector *v);
 void	vector_shrink_to_fit(Vector *v);
 
-// Capacity
-bool	vector_empty(Vector *v);
-size_t	vector_size(Vector *v);
-size_t	vector_capacity(Vector *v);
-
 /* ==================== */
 /* -- Helper macros  -- */
 /* ==================== */
@@ -112,13 +106,13 @@ size_t	vector_capacity(Vector *v);
 // vector_foreach(&v, int, ptr, {
 //     printf("%d\n", ptr);
 // });
-#define vector_foreach(v, T, var, body) do { \
+#define vector_foreach(v, T, var, ...) do { \
 	T *var; \
-	for (size_t _i = 0; _i < (v)->size; ++_i) { \
-	  var = &vec_data_as(v, T)[_i]; \
-	  body \
+	for (size_t _i = 0; _i < (v)->size; _i++) { \
+		var = &vec_data_as(v, T)[_i]; \
+		__VA_ARGS__ \
 	} \
-} while (0)
+} while(0)
 
 // int last = vec_back(&v, int);
 #define vector_back(v, T) (vector_data_as(v, T)[(v)->size - 1])
@@ -130,7 +124,7 @@ size_t	vector_capacity(Vector *v);
 #define vector_init_malloc(T) vector_init(malloc_allocator(), sizeof(T))
 
 // 
-#define vec_from_array(v, T, arr, count) do { \
+#define vector_from_array(v, T, arr, count) do { \
 	vector_reserve((v), (count)); \
 	memcpy((v)->data, (arr), (count) * sizeof(T)); \
 	(v)->size = (count); \
@@ -282,13 +276,6 @@ void vector_shrink_to_fit(Vector *v)
 		v->capacity = v->size;
 	}
 }
-
-/* ============== */
-/* -- Capacity -- */
-/* ============== */
-bool	vector_empty(Vector *v) { return (v->size == 0); }
-size_t	vector_size(Vector *v) { return (v->size); }
-size_t	vector_capacity(Vector *v) { return (v->capacity); }
 
 #endif // VECTOR_IMPLEMENTATION_GUARD
 
