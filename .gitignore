@@ -1,3 +1,4 @@
 .DS_Store
 memarena.h
 *.c
+test_vector*
