@@ -1,3 +1,23 @@
+/*
+   -----------------------------------------------------------------------------
+   VECTOR.H v1.0.0
+   -----------------------------------------------------------------------------
+   Memory-agnostic growable array implementation.
+   
+   Author:  Juuso Rinta
+   Repo:    github.com/juusokasperi/memarena
+   License: MIT
+   -----------------------------------------------------------------------------
+   
+   USAGE:
+     Define VECTOR_IMPLEMENTATION in *one* .c file before including this header.
+     
+     #define VECTOR_IMPLEMENTATION
+     #include "vector.h"
+
+	 In all other files, just #include "vector.h" as per normal.
+*/
+
 #ifndef VEC_H
 #define VEC_H
 
@@ -6,7 +26,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
-#include <stdarg.h>
 
 #ifndef GROWTH_FACTOR
 # define GROWTH_FACTOR (2)
@@ -85,45 +104,39 @@ void	vector_shrink_to_fit(Vector *v);
 /* -- Helper macros  -- */
 /* ==================== */
 
-// vector_push_t(&vector, int, 42);
+/* vector_push_t(&vector, int, 42); */
 #define vector_push_t(v, T, value) do { \
 	T tmp = (value); \
 	vector_push((v), &tmp); \
 } while(0)
 
-// vector_insert_t(&vector, int, 1, 42);
+/* vector_insert_t(&vector, int, 1, 42); */
 #define vector_insert_t(v, T, idx, value) do { \
 	T tmp = (value); \
 	vector_insert((v), (idx), &tmp); \
 } while (0)
 
-// int *arr = vector_data_as(&v, int);
+/* int *arr = vector_data_as(&v, int); */
 #define vector_data_as(v, T) ((T *)((v)->data))
 
-// int x = vector_at(&v, int, 0);
+/* int x = vector_at(&v, int, 0); */
 #define vector_at(v, T, idx) (vector_data_as(v, T)[idx])
 
-// vector_foreach(&v, int, ptr, {
-//     printf("%d\n", ptr);
-// });
-#define vector_foreach(v, T, var, ...) do { \
-	T *var; \
-	for (size_t _i = 0; _i < (v)->size; _i++) { \
-		var = &vec_data_as(v, T)[_i]; \
-		__VA_ARGS__ \
-	} \
-} while(0)
-
-// int last = vec_back(&v, int);
+/* int last = vec_back(&v, int); */
 #define vector_back(v, T) (vector_data_as(v, T)[(v)->size - 1])
 
-// int first = vec_front(&v, int);
+/* int first = vec_front(&v, int); */
 #define vector_front(v, T) (vector_data_as(v, T)[0])
 
-// Vector v = vector_init_malloc(int);
+/* Vector v = vector_init_malloc(int); */
 #define vector_init_malloc(T) vector_init(malloc_allocator(), sizeof(T))
 
-// 
+/* 
+	int array[50]
+	...fill the array..
+	Vector v = vector_init_malloc(int);
+	vector_from_array(&v, int, array, 50);
+*/
 #define vector_from_array(v, T, arr, count) do { \
 	vector_reserve((v), (count)); \
 	memcpy((v)->data, (arr), (count) * sizeof(T)); \
@@ -261,20 +274,39 @@ void vector_pop(Vector *v)
 
 void vector_shrink_to_fit(Vector *v)
 {
-	if (v->size == 0 && v->alloc.free)
+	if (v->size == v->capacity)
+		return;
+
+	if (v->size == 0)
 	{
-		v->alloc.free(v->alloc.ctx, v->data);
+		if (v->alloc.free)
+			v->alloc.free(v->alloc.ctx, v->data);
 		v->data = NULL;
 		v->capacity = 0;
+		return;
 	}
-	else if (v->size < v->capacity && v->alloc.realloc)
+	if (v->alloc.realloc)
 	{
 		void *p = v->alloc.realloc(v->alloc.ctx, v->data, v->size * v->elem_size);
 		if (!p)
 			return;
 		v->data = p;
-		v->capacity = v->size;
 	}
+	else if (v->alloc.alloc)
+	{
+		void *new_block = v->alloc.alloc(v->alloc.ctx, v->size * v->elem_size);
+		if (!new_block)
+		{
+			assert(0 && "vector_shrink_to_fit: out of memory");
+			return;
+		}
+
+		memcpy(new_block, v->data, v->size * v->elem_size);
+		if (v->alloc.free)
+			v->alloc.free(v->alloc.ctx, v->data);
+		v->data = new_block;
+	}
+	v->capacity = v->size;
 }
 
 #endif // VECTOR_IMPLEMENTATION_GUARD

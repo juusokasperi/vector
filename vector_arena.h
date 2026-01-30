@@ -1,18 +1,24 @@
+/*
+   -----------------------------------------------------------------------------
+   VECTOR_ARENA.H v1.0.0
+   -----------------------------------------------------------------------------
+   Helper header file for easy patching between my memarena.h and vector.h.
+   
+   Author:  Juuso Rinta
+   Repo:    github.com/juusokasperi/vector & github.com/juusokasperi/memarena
+   License: MIT
+   -----------------------------------------------------------------------------
+   
+   USAGE:
+	 Arena arena = arena_init(PROT_READ | PROT_WRITE);
+	 Vector v = vector_init(arena_allocator(&arena), sizeof(int));
+*/
+
 #ifndef VEC_ARENA_H
 # define VEC_ARENA_H
 
 #include "vector.h"
 #include "memarena.h"
-
-/*
-*	Helper header file
-*	Allows for easy use of vector.h 
-*	with memarena.h (https://www.github.com/juusokasperi/memarena)
-*
-* 	Example usage;
-*	Arena arena = arena_init(PROT_READ | PROT_WRITE);
-*	Vector v = vector_init(arena_allocator(&arena), sizeof(int));
-*/
 
 static void *arena_alloc_wrapper(void *ctx, size_t size)
 {
