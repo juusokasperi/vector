@@ -131,7 +131,7 @@ vector_push_t(&v, int, 10);
 vector_push_t(&v, int, 20);
 ```
 
-Note that since arenas do not support realloc or free, the vector never shrinks, and growth always allocates new blocks.
+Note that since arenas do not support realloc or free, so growth always allocates new blocks and old memory stays alive in the arena.
 
 ### API Overview
 ```c
