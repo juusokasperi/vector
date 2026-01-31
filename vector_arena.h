@@ -14,8 +14,8 @@
 	 Vector v = vector_init(arena_allocator(&arena), sizeof(int));
 */
 
-#ifndef VEC_ARENA_H
-# define VEC_ARENA_H
+#ifndef VECTOR_ARENA_H
+# define VECTOR_ARENA_H
 
 #include "vector.h"
 #include "memarena.h"
@@ -45,4 +45,4 @@ static Allocator arena_allocator(Arena *arena)
 	return (a);
 }
 
-#endif // VEC_ARENA_H
+#endif // VECTOR_ARENA_H

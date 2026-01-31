@@ -18,8 +18,8 @@
 	 In all other files, just #include "vector.h" as per normal.
 */
 
-#ifndef VEC_H
-#define VEC_H
+#ifndef VECTOR_H
+#define VECTOR_H
 
 #include <assert.h>
 #include <stdbool.h>
@@ -57,8 +57,13 @@ typedef struct {
 /* ================================== */
 static void *malloc_alloc(void *ctx, size_t size, size_t align)
 {
-	(void)align;
 	(void)ctx;
+
+	if (align > 0)
+	{
+		assert(0 && "malloc does not support alignment");
+		return (NULL);
+	}
 	return (malloc(size));
 }
 
@@ -103,6 +108,7 @@ bool	vector_push(Vector *v, void *elem);
 bool	vector_insert(Vector *v, size_t index, void *elem);
 bool	vector_erase(Vector *v, size_t index);
 bool	vector_pop(Vector *v);
+bool	vector_swap_pop(Vector *v, size_t index);
 bool	vector_shrink_to_fit(Vector *v);
 
 /* ==================== */
@@ -142,7 +148,7 @@ bool	vector_shrink_to_fit(Vector *v);
 /* Vector v = vector_init_malloc(int); */
 #define vector_init_malloc(T) vector_init(malloc_allocator(), sizeof(T))
 
-#endif // VEC_H
+#endif // VECTOR_H
 
 #ifdef VECTOR_IMPLEMENTATION
 #ifndef VECTOR_IMPLEMENTATION_GUARD
@@ -404,6 +410,34 @@ bool vector_shrink_to_fit(Vector *v)
 		v->data = new_block;
 	}
 	v->capacity = v->size;
+	return (true);
+}
+
+/* 
+ * Allows for O(1) deletion of a value from anywhere in the array.
+ * 		Note: Does NOT preserve order, swaps the last element to the index
+ * 		the user wants to remove and simply decrements size of vector.
+*/
+bool vector_swap_pop(Vector *v, size_t index)
+{
+	assert(vector_is_valid(v) && "invalid vector");
+	assert(index < v->size && "index out of bounds");
+
+	if (!v || index >= v->size)
+		return (false);
+
+	if (index == v->size - 1)
+	{
+		v->size--;
+		return (true);
+	}
+
+	char *data = (char *)v->data;
+	void *target_slot = data + (index * v->elem_size);
+	void *last_element = data + ((v->size - 1) * v->elem_size);
+
+	memcpy(target_slot, last_element, v->elem_size);
+	v->size--;
 	return (true);
 }
 

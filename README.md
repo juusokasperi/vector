@@ -75,7 +75,10 @@ for (int i = 0; i < v->size; ++i)
 ### Removing elements
 ```c
 vector_pop(&v);
+// Erase is O(n), preserves order
 vector_erase(&v, 0);
+// Swap_pop is O(1), but doesn't preserve order
+vector_swap_pop(&v, 0);
 ```
 
 ### Shrink to Fit
@@ -102,9 +105,9 @@ The vector is fully allocator-agnostic.
 
 ### Allocator interface
 ```c
-typedef void *(*alloc_fn)(void *ctx, size_t size);
-typedef void *(*realloc_fn)(void *ctx, void *ptr, size_t size);
+typedef void *(*alloc_fn)(void *ctx, size_t size, size_t align);
 typedef void (*free_fn)(void *ctx, void *ptr);
+typedef void *(*realloc_fn)(void *ctx, void *ptr, size_t old_size, size_t new_size, size_t align);
 
 typedef struct {
     alloc_fn    alloc;
@@ -131,7 +134,7 @@ vector_push_t(&v, int, 10);
 vector_push_t(&v, int, 20);
 ```
 
-Note that since arenas do not support realloc or free, so growth always allocates new blocks and old memory stays alive in the arena.
+Note that since arenas do not support proper realloc or free, a careful reserve before beginning insertion is advised. My memarena reallocates simply by bumping the offset of the arenablock if reallocing the last allocated element in the arena, which can be useful when e.g. parsing from input into a vector.
 
 ### API Overview
 ```c
@@ -147,6 +150,7 @@ bool vector_shrink_to_fit(Vector *v);
 bool vector_push(Vector *v, void *elem);
 bool vector_insert(Vector *v, size_t index, void *elem);
 bool vector_pop(Vector *v);
+bool vector_swap_pop(Vector *v, size_t index);
 bool vector_erase(Vector *v, size_t index);
 void vector_clear(Vector *v);
 void vector_destroy(Vector *v);
@@ -160,7 +164,3 @@ int *data = vector_data_as(&v, int);
 int y = vector_front(&v, int);
 int z = vector_back(&v, int);
 ```
-
-### Safety Notes
-
-This vector does not perform bounds checking except for debug asserts. All pointer access assumes correct usage.
