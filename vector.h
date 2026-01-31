@@ -26,6 +26,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifndef GROWTH_FACTOR
 # define GROWTH_FACTOR (2)
@@ -91,14 +92,14 @@ static Allocator malloc_allocator(void)
 Vector	vector_init(Allocator alloc, size_t elem_size);
 
 // Modifiers
-void	vector_reserve(Vector *v, size_t new_capacity);
+bool	vector_reserve(Vector *v, size_t new_capacity);
 void	vector_clear(Vector *v);
 void	vector_destroy(Vector *v);
-void	vector_push(Vector *v, void *elem);
-void	vector_insert(Vector *v, size_t index, void *elem);
-void	vector_erase(Vector *v, size_t index);
-void	vector_pop(Vector *v);
-void	vector_shrink_to_fit(Vector *v);
+bool	vector_push(Vector *v, void *elem);
+bool	vector_insert(Vector *v, size_t index, void *elem);
+bool	vector_erase(Vector *v, size_t index);
+bool	vector_pop(Vector *v);
+bool	vector_shrink_to_fit(Vector *v);
 
 /* ==================== */
 /* -- Helper macros  -- */
@@ -120,38 +121,59 @@ void	vector_shrink_to_fit(Vector *v);
 #define vector_data_as(v, T) ((T *)((v)->data))
 
 /* int x = vector_at(&v, int, 0); */
-#define vector_at(v, T, idx) (vector_data_as(v, T)[idx])
+#define vector_at(v, T, idx) ( \
+	assert((idx) < (v)->size && "index out of bounds"), \
+	vector_data_as(v, T)[idx] \
+)
 
 /* int last = vec_back(&v, int); */
-#define vector_back(v, T) (vector_data_as(v, T)[(v)->size - 1])
+#define vector_back(v, T) ( \
+	assert((v)->size > 0 && "vector empty"), \
+	vector_data_as(v, T)[(v)->size - 1] \
+)
 
 /* int first = vec_front(&v, int); */
-#define vector_front(v, T) (vector_data_as(v, T)[0])
+#define vector_front(v, T) ( \
+	assert((v)->size > 0 && "vector empty"), \
+	vector_data_as(v, T)[0] \
+)
 
 /* Vector v = vector_init_malloc(int); */
 #define vector_init_malloc(T) vector_init(malloc_allocator(), sizeof(T))
 
-/* 
-	int array[50]
-	...fill the array..
-	Vector v = vector_init_malloc(int);
-	vector_from_array(&v, int, array, 50);
-*/
-#define vector_from_array(v, T, arr, count) do { \
-	vector_reserve((v), (count)); \
-	memcpy((v)->data, (arr), (count) * sizeof(T)); \
-	(v)->size = (count); \
-} while(0)
+#endif // VEC_H
 
-#ifdef VECTOR_IMPLEMENTATION_GUARD
+#ifdef VECTOR_IMPLEMENTATION
+#ifndef VECTOR_IMPLEMENTATION_GUARD
+#define VECTOR_IMPLEMENTATION_GUARD
+
+/* ===================== */
+/* -- Internal checks -- */
+/* ===================== */
+static inline bool vector_is_valid(const Vector *v)
+{
+	if (!v)
+		return (false);
+	if (v->size > v->capacity)
+		return (false);
+	if (v->capacity > 0 && !v->data)
+		return (false);
+	if (!v->alloc.alloc)
+		return (false);
+	if (v->elem_size == 0)
+		return (false);
+	return (true);
+}
 
 /* ==================== */
 /* -- Initialization -- */
 /* ==================== */
 Vector vector_init(Allocator alloc, size_t elem_size)
 {
-	Vector v;
+	assert(alloc.alloc != NULL && "allocator must provide alloc function");
+	assert(elem_size > 0 && "elem_size must be > 0");
 
+	Vector v;
 	v.size = 0;
 	v.capacity = 0;
 	v.elem_size = elem_size;
@@ -163,28 +185,39 @@ Vector vector_init(Allocator alloc, size_t elem_size)
 /* ==================== */
 /* -- Modifiers      -- */
 /* ==================== */
-void vector_reserve(Vector *v, size_t new_capacity)
+bool vector_reserve(Vector *v, size_t new_capacity)
 {
+	assert(vector_is_valid(v) && "invalid vector");
+
+	if (!v)
+		return (false);
 	if (new_capacity <= v->capacity)
-		return;
+		return (true);
+	if (v->elem_size != 0 && new_capacity > SIZE_MAX / v->elem_size)
+	{
+		assert(0 && "vector_reserve: size overflow");
+		return (false);
+	}
+
+	size_t alloc_size = new_capacity * v->elem_size;
 
 	if (v->data && v->alloc.realloc)
 	{
-		void *p = v->alloc.realloc(v->alloc.ctx, v->data, new_capacity * v->elem_size);
+		void *p = v->alloc.realloc(v->alloc.ctx, v->data, alloc_size);
 		if (!p)
 		{
-			assert(0 && "vector_reserve: realloc: out of memory");
-			return;
+			assert(0 && "vector_reserve: realloc failed");
+			return (false);
 		}
 		v->data = p;
 	}
 	else
 	{
-		void *new_block = v->alloc.alloc(v->alloc.ctx, new_capacity * v->elem_size);
+		void *new_block = v->alloc.alloc(v->alloc.ctx, alloc_size);
 		if (!new_block)
 		{
-			assert(0 && "vector_reserve: out of memory");
-			return;
+			assert(0 && "vector_reserve: alloc failed");
+			return (false);
 		}
 		if (v->data)
 		{
@@ -196,15 +229,22 @@ void vector_reserve(Vector *v, size_t new_capacity)
 	}
 
 	v->capacity = new_capacity;
+	return (true);
 }
 
 void vector_clear(Vector *v)
 {
-	v->size = 0;
+	assert(vector_is_valid(v) && "invalid vector");
+
+	if (v)
+		v->size = 0;
 }
 
 void vector_destroy(Vector *v)
 {
+	if (!v)
+		return;
+
 	if (v->data && v->alloc.free)
 		v->alloc.free(v->alloc.ctx, v->data);
 	v->size = 0;
@@ -217,68 +257,100 @@ void vector_destroy(Vector *v)
 	v->alloc.ctx = NULL;
 }
 
-void vector_push(Vector *v, void *elem)
+static bool grow_vector(Vector *v)
 {
-	if (v->size == v->capacity)
-	{
-		size_t new_capacity = v->capacity ? v->capacity * GROWTH_FACTOR : 8;
-		vector_reserve(v, new_capacity);
-	}
+	size_t new_capacity;
 
-	char *data = (char *)v->data;
-	size_t elem_size = v->elem_size;
-	memcpy(data + v->size * elem_size, elem, elem_size);
-	v->size++;
+	if (v->capacity == 0)
+		new_capacity = 8;
+	else if (v->capacity > SIZE_MAX / GROWTH_FACTOR)
+		new_capacity = SIZE_MAX;
+	else
+		new_capacity = v->capacity * GROWTH_FACTOR;
+
+	return (vector_reserve(v, new_capacity));
 }
 
-void vector_insert(Vector *v, size_t index, void *elem)
+bool vector_push(Vector *v, void *elem)
 {
-	assert(index <= v->size);
+	assert(vector_is_valid(v) && "invalid vector");
+	assert(elem != NULL && "element is NULL");
 
-	if (v->size == v->capacity)
-	{
-		size_t new_capacity = v->capacity ? v->capacity * GROWTH_FACTOR : 8;
-		vector_reserve(v, new_capacity);
-	}
+	if (!v || !elem)
+		return (false);
+
+	if (v->size == v->capacity && !grow_vector(v))
+		return (false);
 
 	char *data = (char *)v->data;
-	size_t elem_size = v->elem_size;
+	memcpy(data + v->size * v->elem_size, elem, v->elem_size);
+	v->size++;
+	return (true);
+}
+
+bool vector_insert(Vector *v, size_t index, void *elem)
+{
+	assert(vector_is_valid(v) && "invalid vector");
+	assert(elem != NULL && "element is NULL");
+	assert(index <= v->size && "index out of bounds");
+
+	if (!v || !elem || index > v->size)
+		return (false);
+	if (v->size == v->capacity && !grow_vector(v))
+		return (false);
+
+	char *data = (char *)v->data;
 
 	memmove(
-		data + (index + 1) * elem_size,
-		data + index * elem_size,
-		(v->size - index) * elem_size
+		data + (index + 1) * v->elem_size,
+		data + index * v->elem_size,
+		(v->size - index) * v->elem_size
 	);
 
-	memcpy(data + index * elem_size, elem, elem_size);
+	memcpy(data + index * v->elem_size, elem, v->elem_size);
 	v->size++;
+	return (true);
 }
 
-void vector_erase(Vector *v, size_t index)
+bool vector_erase(Vector *v, size_t index)
 {
-	assert (index < v->size);
+	assert(vector_is_valid(v) && "invalid vector");
+	assert(index < v->size && "index out of bounds");
+
+	if (!v || index >= v->size)
+		return (false);
 
 	char *data = (char *)v->data;
-	size_t elem_size = v->elem_size;
 
 	memmove(
-		data + index * elem_size,
-		data + (index + 1) * elem_size,
-		(v->size - index - 1) * elem_size
+		data + index * v->elem_size,
+		data + (index + 1) * v->elem_size,
+		(v->size - index - 1) * v->elem_size
 	);
 	v->size--;
+	return (true);
 }
 
-void vector_pop(Vector *v)
+bool vector_pop(Vector *v)
 {
-	if (v->size > 0)
-		vector_erase(v, v->size - 1);
+	assert(vector_is_valid(v) && "invalid vector");
+	assert(v->size > 0 && "vector is empty");
+
+	if (!v || v->size == 0)
+		return (false);
+
+	v->size--;
+	return (true);
 }
 
-void vector_shrink_to_fit(Vector *v)
+bool vector_shrink_to_fit(Vector *v)
 {
+	assert(vector_is_valid(v) && "invalid vector");
+
+	if (!v)
+		return (false);
 	if (v->size == v->capacity)
-		return;
+		return (true);
 
 	if (v->size == 0)
 	{
@@ -286,13 +358,19 @@ void vector_shrink_to_fit(Vector *v)
 			v->alloc.free(v->alloc.ctx, v->data);
 		v->data = NULL;
 		v->capacity = 0;
-		return;
+		return (true);
 	}
+
+	size_t alloc_size = v->size * v->elem_size;
+
 	if (v->alloc.realloc)
 	{
-		void *p = v->alloc.realloc(v->alloc.ctx, v->data, v->size * v->elem_size);
+		void *p = v->alloc.realloc(v->alloc.ctx, v->data, alloc_size);
 		if (!p)
-			return;
+		{
+			assert(0 && "vector_shrink_to_fit: realloc failed");
+			return (false);
+		}
 		v->data = p;
 	}
 	else if (v->alloc.alloc)
@@ -300,8 +378,8 @@ void vector_shrink_to_fit(Vector *v)
 		void *new_block = v->alloc.alloc(v->alloc.ctx, v->size * v->elem_size);
 		if (!new_block)
 		{
-			assert(0 && "vector_shrink_to_fit: out of memory");
-			return;
+			assert(0 && "vector_shrink_to_fit: alloc failed");
+			return (false);
 		}
 
 		memcpy(new_block, v->data, v->size * v->elem_size);
@@ -310,8 +388,8 @@ void vector_shrink_to_fit(Vector *v)
 		v->data = new_block;
 	}
 	v->capacity = v->size;
+	return (true);
 }
 
 #endif // VECTOR_IMPLEMENTATION_GUARD
-
-#endif // VEC_H
+#endif // VECTOR_IMPLEMENTATION
