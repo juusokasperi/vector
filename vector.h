@@ -172,7 +172,10 @@ void vector_reserve(Vector *v, size_t new_capacity)
 	{
 		void *p = v->alloc.realloc(v->alloc.ctx, v->data, new_capacity * v->elem_size);
 		if (!p)
+		{
+			assert(0 && "vector_reserve: realloc: out of memory");
 			return;
+		}
 		v->data = p;
 	}
 	else
