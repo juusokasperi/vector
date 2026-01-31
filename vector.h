@@ -106,10 +106,7 @@ bool	vector_shrink_to_fit(Vector *v);
 /* ==================== */
 
 /* vector_push_t(&vector, int, 42); */
-#define vector_push_t(v, T, value) do { \
-	T tmp = (value); \
-	vector_push((v), &tmp); \
-} while(0)
+#define vector_push_t(v, T, value) vector_push((v), &((T){value}))
 
 /* vector_insert_t(&vector, int, 1, 42); */
 #define vector_insert_t(v, T, idx, value) do { \
