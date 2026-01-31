@@ -119,10 +119,7 @@ bool	vector_shrink_to_fit(Vector *v);
 #define vector_push_t(v, T, value) vector_push((v), &((T){value}))
 
 /* vector_insert_t(&vector, int, 1, 42); */
-#define vector_insert_t(v, T, idx, value) do { \
-	T tmp = (value); \
-	vector_insert((v), (idx), &tmp); \
-} while (0)
+#define vector_insert_t(v, T, idx, value) vector_insert((v), (idx), &((T){value}))
 
 /* int *arr = vector_data_as(&v, int); */
 #define vector_data_as(v, T) ((T *)((v)->data))
