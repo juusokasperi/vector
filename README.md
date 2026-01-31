@@ -140,14 +140,14 @@ Vector vector_init(Allocator alloc, size_t elem_size);
 #define vector_init_malloc(T)
 
 // Capacity
-void vector_reserve(Vector *v, size_t capacity);
-void vector_shrink_to_fit(Vector *v);
+bool vector_reserve(Vector *v, size_t capacity);
+bool vector_shrink_to_fit(Vector *v);
 
 // Modifiers
-void vector_push(Vector *v, void *elem);
-void vector_insert(Vector *v, size_t index, void *elem);
-void vector_pop(Vector *v);
-void vector_erase(Vector *v, size_t index);
+bool vector_push(Vector *v, void *elem);
+bool vector_insert(Vector *v, size_t index, void *elem);
+bool vector_pop(Vector *v);
+bool vector_erase(Vector *v, size_t index);
 void vector_clear(Vector *v);
 void vector_destroy(Vector *v);
 
