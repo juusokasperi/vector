@@ -5,7 +5,7 @@
    Memory-agnostic growable array implementation.
    
    Author:  Juuso Rinta
-   Repo:    github.com/juusokasperi/memarena
+   Repo:    github.com/juusokasperi/vector
    License: MIT
    -----------------------------------------------------------------------------
    
@@ -32,10 +32,9 @@
 # define GROWTH_FACTOR (2)
 #endif
 
-typedef void *(*alloc_fn)(void *ctx, size_t size);
+typedef void *(*alloc_fn)(void *ctx, size_t size, size_t align);
 typedef void (*free_fn)(void *ctx, void *ptr);
-typedef void *(*realloc_fn)(void *ctx, void *ptr, size_t size);
-
+typedef void *(*realloc_fn)(void *ctx, void *ptr, size_t old_size, size_t new_size, size_t align);
 
 typedef struct {
 	alloc_fn	alloc;
@@ -48,6 +47,7 @@ typedef struct {
 	size_t			size;
 	size_t			capacity;
 	size_t			elem_size;
+	size_t			align;
 	void			*data;
 	Allocator	alloc;
 } Vector;
@@ -55,16 +55,19 @@ typedef struct {
 /* ================================== */
 /* -- Allocator pattern for malloc -- */ 
 /* ================================== */
-static void *malloc_alloc(void *ctx, size_t size)
+static void *malloc_alloc(void *ctx, size_t size, size_t align)
 {
+	(void)align;
 	(void)ctx;
 	return (malloc(size));
 }
 
-static void *malloc_realloc(void *ctx, void *ptr, size_t size)
+static void *malloc_realloc(void *ctx, void *ptr, size_t old_size, size_t new_size, size_t align)
 {
 	(void)ctx;
-	return (realloc(ptr, size));
+	(void)old_size;
+	(void)align;
+	return (realloc(ptr, new_size));
 }
 
 static void malloc_free(void *ctx, void *ptr)
@@ -90,6 +93,7 @@ static Allocator malloc_allocator(void)
 
 // Initialization
 Vector	vector_init(Allocator alloc, size_t elem_size);
+Vector	vector_init_aligned(Allocator alloc, size_t elem_size, size_t align);
 
 // Modifiers
 bool	vector_reserve(Vector *v, size_t new_capacity);
@@ -167,17 +171,25 @@ static inline bool vector_is_valid(const Vector *v)
 /* ==================== */
 Vector vector_init(Allocator alloc, size_t elem_size)
 {
+	return (vector_init_aligned(alloc, elem_size, 0));
+}
+
+Vector vector_init_aligned(Allocator alloc, size_t elem_size, size_t align)
+{
 	assert(alloc.alloc != NULL && "allocator must provide alloc function");
 	assert(elem_size > 0 && "elem_size must be > 0");
+	assert((align & (align - 1)) == 0 && "alignment must be power of 2");
 
 	Vector v;
 	v.size = 0;
 	v.capacity = 0;
 	v.elem_size = elem_size;
+	v.align = align;
 	v.data = NULL;
 	v.alloc = alloc;
 	return (v);
 }
+
 
 /* ==================== */
 /* -- Modifiers      -- */
@@ -197,10 +209,11 @@ bool vector_reserve(Vector *v, size_t new_capacity)
 	}
 
 	size_t alloc_size = new_capacity * v->elem_size;
+	size_t old_size = v->capacity * v->elem_size;
 
 	if (v->data && v->alloc.realloc)
 	{
-		void *p = v->alloc.realloc(v->alloc.ctx, v->data, alloc_size);
+		void *p = v->alloc.realloc(v->alloc.ctx, v->data, old_size, alloc_size, v->align);
 		if (!p)
 		{
 			assert(0 && "vector_reserve: realloc failed");
@@ -210,7 +223,7 @@ bool vector_reserve(Vector *v, size_t new_capacity)
 	}
 	else
 	{
-		void *new_block = v->alloc.alloc(v->alloc.ctx, alloc_size);
+		void *new_block = v->alloc.alloc(v->alloc.ctx, alloc_size, v->align);
 		if (!new_block)
 		{
 			assert(0 && "vector_reserve: alloc failed");
@@ -247,6 +260,7 @@ void vector_destroy(Vector *v)
 	v->size = 0;
 	v->capacity = 0;
 	v->elem_size = 0;
+	v->align = 0;
 	v->data = NULL;
 	v->alloc.alloc = NULL;
 	v->alloc.free = NULL;
@@ -349,10 +363,15 @@ bool vector_shrink_to_fit(Vector *v)
 	if (v->size == v->capacity)
 		return (true);
 
+	size_t old_size = v->capacity * v->elem_size;
+
 	if (v->size == 0)
 	{
 		if (v->alloc.free)
 			v->alloc.free(v->alloc.ctx, v->data);
+		else if (v->alloc.realloc && v->data)
+			v->alloc.realloc(v->alloc.ctx, v->data, old_size, 0, v->align);
+
 		v->data = NULL;
 		v->capacity = 0;
 		return (true);
@@ -362,7 +381,7 @@ bool vector_shrink_to_fit(Vector *v)
 
 	if (v->alloc.realloc)
 	{
-		void *p = v->alloc.realloc(v->alloc.ctx, v->data, alloc_size);
+		void *p = v->alloc.realloc(v->alloc.ctx, v->data, old_size, alloc_size, v->align);
 		if (!p)
 		{
 			assert(0 && "vector_shrink_to_fit: realloc failed");
@@ -372,14 +391,14 @@ bool vector_shrink_to_fit(Vector *v)
 	}
 	else if (v->alloc.alloc)
 	{
-		void *new_block = v->alloc.alloc(v->alloc.ctx, v->size * v->elem_size);
+		void *new_block = v->alloc.alloc(v->alloc.ctx, alloc_size, v->align);
 		if (!new_block)
 		{
 			assert(0 && "vector_shrink_to_fit: alloc failed");
 			return (false);
 		}
 
-		memcpy(new_block, v->data, v->size * v->elem_size);
+		memcpy(new_block, v->data, alloc_size);
 		if (v->alloc.free)
 			v->alloc.free(v->alloc.ctx, v->data);
 		v->data = new_block;
