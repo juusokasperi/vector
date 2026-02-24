@@ -1,23 +1,21 @@
 /*
    -----------------------------------------------------------------------------
-   VECTOR_ARENA.H v1.0.0
+   ARENA_ALLOCATOR.H v1.0.0
    -----------------------------------------------------------------------------
-   Helper header file for easy patching between my memarena.h and vector.h.
+   Helper header file for easy patching between my memarena.h and other memory-
+   agnostic utils in my GitHub (e.g. vector.h, circbuf.h).
    
    Author:  Juuso Rinta
-   Repo:    github.com/juusokasperi/vector & github.com/juusokasperi/memarena
+   Repo:    github.com/juusokasperi/memarena
    License: MIT
    -----------------------------------------------------------------------------
    
-   USAGE:
-	 Arena arena = arena_init(PROT_READ | PROT_WRITE);
-	 Vector v = vector_init(arena_allocator(&arena), sizeof(int));
 */
 
-#ifndef VECTOR_ARENA_H
-# define VECTOR_ARENA_H
+#ifndef ARENA_ALLOCATOR_H
+# define ARENA_ALLOCATOR_H
 
-#include "vector.h"
+#include "allocator.h"
 #include "memarena.h"
 
 static void *arena_alloc_wrapper(void *ctx, size_t size, size_t align)
@@ -45,4 +43,5 @@ static Allocator arena_allocator(Arena *arena)
 	return (a);
 }
 
-#endif // VECTOR_ARENA_H
+#endif // ARENA_ALLOCATOR_H
+

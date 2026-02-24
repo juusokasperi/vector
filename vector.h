@@ -27,21 +27,11 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "allocator.h"
 
 #ifndef GROWTH_FACTOR
 # define GROWTH_FACTOR (2)
 #endif
-
-typedef void *(*alloc_fn)(void *ctx, size_t size, size_t align);
-typedef void (*free_fn)(void *ctx, void *ptr);
-typedef void *(*realloc_fn)(void *ctx, void *ptr, size_t old_size, size_t new_size, size_t align);
-
-typedef struct {
-	alloc_fn	alloc;
-	realloc_fn	realloc;
-	free_fn		free;
-	void		*ctx;
-} Allocator;
 
 typedef struct {
 	size_t			size;
@@ -51,46 +41,6 @@ typedef struct {
 	void			*data;
 	Allocator	alloc;
 } Vector;
-
-/* ================================== */
-/* -- Allocator pattern for malloc -- */ 
-/* ================================== */
-static void *malloc_alloc(void *ctx, size_t size, size_t align)
-{
-	(void)ctx;
-
-	if (align > 0)
-	{
-		assert(0 && "malloc does not support alignment");
-		return (NULL);
-	}
-	return (malloc(size));
-}
-
-static void *malloc_realloc(void *ctx, void *ptr, size_t old_size, size_t new_size, size_t align)
-{
-	(void)ctx;
-	(void)old_size;
-	(void)align;
-	return (realloc(ptr, new_size));
-}
-
-static void malloc_free(void *ctx, void *ptr)
-{
-	(void)ctx;
-	free(ptr);
-}
-
-static Allocator malloc_allocator(void)
-{
-	Allocator a;
-
-	a.alloc = malloc_alloc;
-	a.realloc = malloc_realloc;
-	a.free = malloc_free;
-	a.ctx = NULL;
-	return (a);
-}
 
 /* ==================== */
 /* -- API Prototypes -- */
