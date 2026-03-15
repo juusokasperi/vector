@@ -123,7 +123,7 @@ You can plug in any allocator model, e.g. **memory arenas**, **region allocators
 
 If you use memarena, include the helper:
 ```c
-#include "vector_arena.h"
+#include "arena_allocator.h"
 ```
 
 Example:
